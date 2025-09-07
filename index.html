@@ -88,7 +88,7 @@ var game = {
                "A crooked sign reads: \"Deliveries to Green Gables — " + (game.flags.catFreed ? "Thank you." : "After dark, beware the cat.") + "\"";
       },
       exits:{west:"harbor_edge", east:"gate_road"},
-      items:["sign","lamp_post"]
+      items:["sign","lamp_post","envelope"]
     },
     "harbor_edge":{
       name:"Harbor Edge",
@@ -134,7 +134,7 @@ var game = {
         return "A quiet foyer with the smell of tea and ink. On a small table lies a sealed envelope addressed \"To the Deliverer.\"";
       },
       exits:{outside:"porch"},
-      items:["envelope"]
+      items:[]
     }
   },
   items:{
