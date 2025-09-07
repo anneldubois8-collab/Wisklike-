@@ -207,4 +207,102 @@
     if (items.length) say(`You see ${items.map(id=>articleName(id)).join(", ")}.`);
   }
   function doHelp(){ say(`Commands: LOOK/L, EXAMINE/X <thing>, GO/G <N|S|E|W|INSIDE|OUTSIDE>, TAKE/GET <item>, DROP <item>, INVENTORY/I, OPEN/UNLOCK <thing>, READ <thing>, USE <thing>, TALK <to>, GIVE <item> TO <who>, WISH FOR <LIGHT|NEAR|OPEN|CALM>, SAVE, LOAD, RESTART.`); }
-  function doLook(){ describeRoom();
+  function doLook(){ describeRoom(); }
+  function doExamine(parts){ const id=resolveItem(parts.slice(1).join(" ")); if(!id) return say(`You don't see that.`); const it=game.items[id]; const d=typeof it.desc==="function"?it.desc(game):it.desc; say(d); }
+  function doGo(parts){
+    const dir=(parts[1]||"").toLowerCase(); const r=room(); const dest=(r.exits||{})[dir];
+    if(!dest){
+      if (dir==="east" && game.here==="gate_road" && !game.flags.gateOpen) return say(`The locked gate bars the way.`);
+      if (dir==="north" && game.here==="garden" && !game.flags.light) return say(`It's too dark to blunder forward safely.`);
+      return say(`You can't go that way.`);
+    }
+    move(dest);
+  }
+  function move(dest){ game.here=dest; game.turn++; setHUD(); describeRoom(); checkWin(); }
+  function doTake(parts){ const id=resolveItem(parts.slice(1).join(" ")); if(!id) return say(`Take what?`);
+    if(has(id)) return say(`You already have ${nameOf(id)}.`); if(!itemsHere().includes(id) && !id.endsWith("_out")) return say(`You don't see that here.`);
+    const it=game.items[id]; if(it && it.portable===false) return say(`You can't take ${nameOf(id)}.`);
+    if(id.endsWith("_out")){ const verb=it?.verbs?.take; return verb?verb(game):say(`You can't take that.`);}
+    addInv(id); room().items = itemsHere().filter(x=>x!==id); say(`Taken.`);
+  }
+  function doDrop(parts){ const id=resolveItem(parts.slice(1).join(" ")); if(!id||!has(id)) return say(`You don't have that.`);
+    game.inventory=game.inventory.filter(x=>x!==id); room().items = (room().items||[]).concat(id); say(`Dropped.`);
+  }
+  function doInv(){ say(game.inventory.length?`You carry: ${game.inventory.map(nameOf).join(", ")}.`:`You're empty-handed.`); }
+  function doOpen(parts){ const id=resolveItem(parts.slice(1).join(" ")); if(!id) return say(`Open what?`); const it=game.items[id]; const v=it?.verbs?.open; if(v) return v(game);
+    if(id==="gate" && !game.flags.gateOpen) return say(`It seems fused shut.`); return say(`That doesn't open.`);
+  }
+  function doRead(parts){ const id=resolveItem(parts.slice(1).join(" ")); if(!id) return say(`Read what?`); const v=game.items[id]?.verbs?.read; if(v) return v(game); return say(`There's nothing to read there.`); }
+  function doUse(parts){ const id=resolveItem(parts.slice(1).join(" ")); if(!id) return say(`Use what?`); if(!has(id) && !itemsHere().includes(id)) return say(`You don't have that.`);
+    const v=game.items[id]?.verbs?.use; if(v) return v(game); return say(`You fiddle with ${nameOf(id)}. Nothing happens.`);}
+  function doTalk(parts){ const idx=parts.indexOf("to"); const noun=idx>=0?parts.slice(idx+1).join(" "):parts.slice(1).join(" "); const id=resolveItem(noun);
+    if(!id) return say(`Talk to whom?`); const v=game.items[id]?.verbs?.talk; if(v) return v(game); return say(`They have nothing to say.`);}
+  function doGive(parts){ const idx=parts.indexOf("to"); if(idx<0) return say(`Give what to whom? (e.g., GIVE BISCUITS TO CAT)`);
+    const itemId=resolveItem(parts.slice(1,idx).join(" ")); const whoId=resolveItem(parts.slice(idx+1).join(" "));
+    if(!itemId||!whoId) return say(`Give what to whom?`); if(!has(itemId)) return say(`You don't have ${nameOf(itemId)}.`);
+    if(whoId!=="cat") return say(`That doesn't want gifts.`); if(itemId==="biscuits" && !game.flags.catFreed){ game.flags.catFreed=true; return say(`You offer biscuits. The cat devours them and graciously vacates the wall.`);}
+    say(`The cat sniffs and loses interest.`);
+  }
+  function doWish(parts){
+    const idx=parts.indexOf("for"); const target=(idx>=0?parts.slice(idx+1):parts.slice(1)).join(" ").trim().toLowerCase();
+    if(!has("wishstone")) return say(`You have nothing suitable for wishing.`); if(!target) return say(`WISH FOR what? Try LIGHT, NEAR, OPEN, or CALM.`);
+    game.flags.stoneAwake=true;
+    if(target.startsWith("light")){ game.flags.light=true; return say(`The wishstone warms in your palm. A soft radiance gathers around you, pushing back the dark.`);}
+    if(target.startsWith("near")){ if(game.here==="harbor_edge" && !has("rowboat")){ addInv("rowboat"); return say(`Water puckers; the rowboat drifts closer. You secure it.`);} return say(`A sense of closeness settles, but nothing else changes.`);}
+    if(target.startsWith("open")){ if(game.here==="gate_road" && !game.flags.gateOpen){ game.flags.gateOpen=true; return say(`Metal sighs; the iron gate yields with a reluctant clank.`);} return say(`Somewhere, a latch clicks — but not here.`);}
+    if(target.startsWith("calm")){ if(!game.flags.catFreed && game.here==="gate_road"){ game.flags.catFreed=true; return say(`The cat blinks slowly, tension melting. It hops aside, permitting passage.`);} return say(`The world hushes for a heartbeat.`);}
+    say(`The stone feels puzzled by that request.`);
+  }
+  function checkWin(){ if(game.here==="foyer" && !game.flags.won){ game.flags.won=true; say(`\nA voice from within: “Right on time.” You leave the biscuits on the hall table.\nThe stone cools, satisfied. — THE END (prototype)`); } }
+  function doSave(){ try{ localStorage.setItem("wishlike_save", JSON.stringify(game)); say(`Saved.`);}catch{ showError('Save failed.'); } }
+  function doLoad(){ const s=localStorage.getItem("wishlike_save"); if(!s) return say(`No save found.`); Object.assign(game, JSON.parse(s)); setHUD(); describeRoom(); say(`Loaded.`); }
+  function doRestart(){ init(true); say(`Restarted.`); }
+
+  /* Input & buttons */
+  const input = document.getElementById('input');
+  const btn   = document.getElementById('btn');
+
+  function handle(line){
+    line=(line||"").trim(); if(!line) return; say(`\n> ${line}`);
+    const t=line.toLowerCase().split(/\s+/); const v=t[0];
+    if(verbs[v]) return verbs[v](t);
+    if(["n","s","e","w","north","south","east","west","inside","outside"].includes(v)) return verbs[v](t);
+    if(v==="look" && t[1]==="at") return verbs.examine([t[0]].concat(t.slice(2)));
+    say(`I don't understand that verb. Try HELP.`);
+  }
+
+  /* Bind safely and test */
+  function bindUI(){
+    btn.addEventListener('click', ()=>{ const v=input.value; input.value=""; handle(v); input.focus(); });
+    input.addEventListener('keydown', e=>{ if(e.key==="Enter"){ btn.click(); }});
+    document.querySelectorAll('.qbtn').forEach(b=> b.addEventListener('click', ()=> { handle(b.dataset.cmd); input.focus(); }));
+    // Self-tests
+    document.getElementById('ping').addEventListener('click', ()=> say('Ping OK'));
+    document.getElementById('sendlook').addEventListener('click', ()=> handle('LOOK'));
+  }
+
+  function init(hard=false){
+    if(hard){
+      game.turn=0; game.flags={light:false, gateOpen:false, catFreed:false, stoneAwake:false, won:false}; game.inventory=[];
+      game.rooms.green_gables_path.items=["sign","lamp_post"];
+      game.rooms.harbor_edge.items=["pebbles","rowboat_out"];
+      game.rooms.gate_road.items=["gate","cat","note"];
+      game.rooms.garden.items=["flowerpot"];
+      game.rooms.porch.items=["door","plaque"];
+      game.rooms.foyer.items=["envelope"];
+    }
+    game.here=game.start; logEl.innerHTML="";
+    say("Deliver the biscuits to Green Gables after dark.\n(HELP for commands)");
+    setHUD(); describeRoom();
+  }
+
+  // DOM ready
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', ()=>{ bindUI(); init(true); });
+  } else {
+    bindUI(); init(true);
+  }
+})();
+</script>
+</body>
+</html>
