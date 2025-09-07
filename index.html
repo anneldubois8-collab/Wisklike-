@@ -177,6 +177,23 @@ var game = {
     },
     "house_key":{name:"brass key",article:"a",portable:true,desc:"Well-worn."},
     "rowboat":{name:"rowboat",article:"a",portable:true,desc:"A small tied rowboat."}
+    "flowerpot":{
+    name:"flowerpot",
+    desc:"An old clay flowerpot sits by the path. It looks like it could be moved.",
+    take:false,
+    open:function(){
+        if(!game.flags.gotKey){
+            log("You lift the flowerpot and discover a brass key!");
+            game.inventory.push("brass key");
+            game.flags.gotKey=true;
+        } else {
+            log("You already took the brass key from under the flowerpot.")
+},
+"brass key":{
+    name:"brass key",
+    desc:"A small brass key. It looks like it could open a simple lock.",
+    take:true
+},
   }
 };
 
