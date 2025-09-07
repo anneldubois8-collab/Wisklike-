@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Wishlike (Garden-Ready)</title>
+<title>Wishlike — Stable Build</title>
 <style>
   :root{--bg:#0f0f0f;--fg:#f3f3f3;--muted:#bdbdbd;--panel:#161616;--border:#2a2a2a;--hud-h:56px}
   html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:ui-rounded,-apple-system,system-ui,Segoe UI,Roboto,Arial}
@@ -11,15 +11,15 @@
   .hud{position:sticky;top:0;padding:10px;height:var(--hud-h);background:#121212;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;font-size:16px}
   .title{font-weight:700;margin-right:auto}
   .badge{background:#1d1d1d;border:1px solid var(--border);padding:6px 10px;border-radius:10px;color:var(--muted)}
+  #errors{display:none;margin:8px 14px;background:#3b0f12;border:1px solid #632529;border-radius:8px;color:#ffd4d4;padding:10px;font-size:14px;white-space:pre-wrap}
   #log{flex:1;overflow:auto;padding:14px 14px 24px 14px;line-height:1.35;font-size:18px;background:var(--panel)}
   .footer{position:sticky;bottom:0;background:#121212;border-top:1px solid var(--border)}
-  .quickbar{display:grid;grid-template-columns:repeat(9,1fr);gap:8px;padding:12px}
+  .quickbar{display:grid;grid-template-columns:repeat(10,1fr);gap:8px;padding:12px}
   .qbtn{font-size:16px;padding:12px 10px;background:#1b1b1b;color:#fff;border:1px solid var(--border);border-radius:10px}
   .promptline{display:flex;gap:8px;padding:10px;padding-top:0}
   #input{flex:1;font-size:18px;padding:14px 12px;background:#161616;color:#fff;border:1px solid var(--border);border-radius:10px}
   #btn{font-size:18px;font-weight:700;padding:14px 16px;background:#35d07f;color:#000;border:none;border-radius:10px}
   @media (max-width:420px){.quickbar{grid-template-columns:repeat(4,1fr)}}
-  #errors{display:none;margin:8px 14px;background:#3b0f12;border:1px solid #632529;border-radius:8px;color:#ffd4d4;padding:10px;font-size:14px;white-space:pre-wrap}
 </style>
 </head>
 <body>
@@ -31,7 +31,7 @@
   </div>
 
   <div id="errors" aria-live="polite"></div>
-  <div id="log" aria-live="polite">Welcome to Wishlike.</div>
+  <div id="log" aria-live="polite">Deliver the biscuits to Green Gables after dark.<br>(HELP for commands)</div>
 
   <div class="footer">
     <div class="quickbar" aria-label="Quick actions">
@@ -44,18 +44,18 @@
       <button class="qbtn" onclick="handle('W')">W</button>
       <button class="qbtn" onclick="handle('WISH FOR CALM')">CALM</button>
       <button class="qbtn" onclick="handle('WISH FOR OPEN')">OPEN</button>
+      <button class="qbtn" onclick="init(true)">RESTART</button>
     </div>
     <div class="promptline">
       <input id="input" type="text" inputmode="latin" autocomplete="off" autocapitalize="characters" autocorrect="off"
-             placeholder="Type a command (e.g., OPEN ENVELOPE, WISH FOR OPEN)" onkeydown="if(event.key==='Enter'){sendCmd()}" />
+             placeholder="Type a command (e.g., WISH FOR LIGHT, LOOK FLOWERPOT)" onkeydown="if(event.key==='Enter'){sendCmd()}" />
       <button id="btn" aria-label="Enter command" onclick="sendCmd()">Enter</button>
-      <button class="qbtn" onclick="init(true)" title="Restart">↻</button>
     </div>
   </div>
 </div>
 
 <script>
-/* Show script errors on the page */
+/* Error box on page */
 (function(){
   var errBox=document.getElementById('errors');
   window.addEventListener('error', function(e){
@@ -75,29 +75,28 @@ function say(t){ appendHTML(t); }
 function setHUD(){ document.getElementById('loc').textContent = room().name; document.getElementById('time').textContent = 'Turn ' + game.turn; }
 function sendCmd(){ var inp=document.getElementById('input'); var v=inp.value; inp.value=''; handle(v); inp.focus(); }
 
-/* Game (envelope at start; dynamic east exit updates) */
+/* Game state */
 var game = {
   turn:0,
-  flags:{ light:false, gateOpen:false, catFreed:false, stoneAwake:false, won:false },
-  inventory:[],
+  flags:{ light:false, gateOpen:false, catFreed:false, stoneAwake:false, won:false, potKeyTaken:false },
+  inventory:["wishstone","biscuits"],  /* start with items so you can wish immediately */
   start:"green_gables_path",
   rooms:{
     "green_gables_path":{
       name:"Pebble Lane, Twilight",
       desc:function(){
-        return "You stand on Pebble Lane as dusk smothers the village. To the east, the lane bends toward a " +
-               (game.flags.gateOpen ? "yawning, open gate" : "rusted iron gate") +
-               " set in a low wall. West leads back toward the harbor lamps.\n" +
-               "A crooked sign reads: \"Deliveries to Green Gables — " + (game.flags.catFreed ? "Thank you." : "After dark, beware the cat.") + "\"";
+        return "You stand on Pebble Lane as dusk smothers the village. To the east, the lane bends toward a "+
+               (game.flags.gateOpen?"yawning, open gate":"rusted iron gate")+" set in a low wall. West leads back toward the harbor lamps.\n"+
+               "A crooked sign reads: \"Deliveries to Green Gables — "+(game.flags.catFreed?"Thank you.":"After dark, beware the cat.")+"\"";
       },
       exits:{west:"harbor_edge", east:"gate_road"},
-      items:["sign","lamp_post","envelope"]   /* ← envelope now starts here */
+      items:["sign","lamp_post"]
     },
     "harbor_edge":{
       name:"Harbor Edge",
       desc:function(){
-        return "Salt rides the air. Black water laps at barnacled pilings. The faint shape of a " +
-               (has("rowboat") ? "tied rowboat" : "rowboat drifting just out of reach") + " bobs nearby.";
+        return "Salt rides the air. Black water laps at barnacled pilings. The faint shape of a "+
+               (has("rowboat")?"tied rowboat":"rowboat drifting just out of reach")+" bobs nearby.";
       },
       exits:{east:"green_gables_path"},
       items:["pebbles","rowboat_out"]
@@ -105,19 +104,19 @@ var game = {
     "gate_road":{
       name:"Green Gables Gate",
       desc:function(){
-        return "The road ends at a low wall and an iron gate " + (game.flags.gateOpen ? "hanging ajar" : "locked tight") +
-               ". Beyond, a garden path loses itself in shadow.\n" +
-               "A " + ((has("cat")||game.flags.catFreed) ? "contented" : "watchful") + " cat watches from the wall.";
+        return "The road ends at a low wall and an iron gate "+(game.flags.gateOpen?"hanging ajar":"locked tight")+
+               ". Beyond, a garden path loses itself in shadow.\n"+
+               "A "+((game.flags.catFreed)?"contented":"watchful")+" cat watches from the wall.";
       },
-      exits:{west:"green_gables_path", east:null}, /* east gets toggled by updateDynamicExits() */
+      exits:{west:"green_gables_path", east:null}, /* east toggled by updateDynamicExits() */
       items:["gate","cat","note"]
     },
     "garden":{
       name:"Green Gables Garden",
       desc:function(){
-        return "Night presses between hedges. A porch light is dead. A " +
-               (game.flags.light ? "faint glow reveals a brass key under a flowerpot" : "flowerpot sits in gloom; something might be beneath") +
-               ".\nThe front door faces north.";
+        return "Night presses between hedges. A porch light is dead. "+
+               (game.flags.light ? "A faint glow reveals a brass key under a flowerpot." : "A flowerpot sits in gloom; something might be beneath.")+
+               "\nThe front door faces north.";
       },
       exits:{west:"gate_road", north:"porch"},
       items:["flowerpot"]
@@ -125,7 +124,7 @@ var game = {
     "porch":{
       name:"Porch of Green Gables",
       desc:function(){
-        return "Wooden steps creak. The door is " + (has("house_key") ? "unlocked if you choose" : "locked") +
+        return "Wooden steps creak. The door is "+(has("house_key")?"unlocked if you choose":"locked")+
                ". A brass plaque reads: \"Deliver biscuits; mind the cat.\"";
       },
       exits:{south:"garden", inside:null},
@@ -133,9 +132,7 @@ var game = {
     },
     "foyer":{
       name:"Foyer",
-      desc:function(){
-        return "A quiet foyer with the smell of tea and ink. A small table is cleared.";
-      },
+      desc:function(){ return "A quiet foyer with the smell of tea and ink. The hall table waits for the delivery."; },
       exits:{outside:"porch"},
       items:[]
     }
@@ -154,50 +151,39 @@ var game = {
     },
     "cat":{name:"cat",article:"a",portable:false,
       desc:function(){ return game.flags.catFreed ? "A purring guardian." : "A wary cat, eyes like coals."; },
-      verbs:{ talk:function(){ if(!game.flags.catFreed) return say("“Mrrrp.” It eyes your hands."); say("The cat chirps."); } }
+      verbs:{
+        talk:function(){ if(!game.flags.catFreed) return say("“Mrrrp.” It eyes your hands."); say("The cat chirps."); }
+      }
     },
     "note":{name:"note",article:"a",portable:true,desc:"\"Payment enclosed. Bring biscuits.\"",verbs:{read:function(){say("It says to bring biscuits.");}}},
     "flowerpot":{name:"flowerpot",article:"a",portable:false,
-      desc:function(){ return game.flags.light ? "A clay pot. A brass key glints beneath." : "A clay pot. Too dark to see under."; },
-      verbs:{ look:function(){ if(!game.flags.light) return say("Too dark to see."); if(!has("house_key")){ addInv("house_key"); say("You find a brass key. Taken."); } else say("Nothing else."); } }
+      desc:function(){ return game.flags.light ? "A clay pot by the path; something glints beneath." : "A clay pot sits in darkness."; },
+      verbs:{
+        look:function(){
+          if(!game.flags.light) return say("It's too dark to see under the pot.");
+          if(!game.flags.potKeyTaken){ addInv("house_key"); game.flags.potKeyTaken=true; return say("You lift the pot and find a brass key. Taken."); }
+          say("Nothing else under the pot.");
+        },
+        open:function(){ this.look(); }
+      }
     },
     "door":{name:"front door",article:"the",portable:false,
       desc:function(){ return has("house_key") ? "The door will open for a friend with a key." : "Locked."; },
       verbs:{ open:function(){ if(!has("house_key")) return say("Locked."); say("You unlock the door."); move("foyer"); } }
     },
     "plaque":{name:"plaque",article:"a",portable:false,desc:"\"Deliver biscuits; mind the cat.\""},
-    "envelope":{name:"sealed envelope",article:"a",portable:true,desc:"Heavy paper; something rattles.",
-      verbs:{ open:function(){ removeFromRoomOrInv("envelope"); addInv("wishstone"); addInv("biscuits"); say("Inside: biscuits and a smooth stone."); } }
-    },
     "wishstone":{name:"wishstone",article:"the",portable:true,desc:"A smooth, opalescent stone.",
-      verbs:{ use:function(){ say("If you mean to WISH, say \"WISH FOR ...\"."); }, read:function(){ say("Runes: Light. Near. Open. Calm."); } }
+      verbs:{ use:function(){ say('If you mean to WISH, say "WISH FOR ..."'); }, read:function(){ say("Runes: Light. Near. Open. Calm."); } }
     },
     "biscuits":{name:"bag of biscuits",article:"a",portable:true,desc:"Warm biscuits.",
-      verbs:{ use:function(){ if(at("gate_road")&&!game.flags.catFreed){ game.flags.catFreed=true; say("The cat devours a biscuit and hops aside."); updateDynamicExits(); } else say("You have a nibble."); } }
+      verbs:{ use:function(){ if(at("gate_road")&&!game.flags.catFreed){ game.flags.catFreed=true; say("The cat devours a biscuit and hops aside."); } else say("You have a nibble."); } }
     },
     "house_key":{name:"brass key",article:"a",portable:true,desc:"Well-worn."},
     "rowboat":{name:"rowboat",article:"a",portable:true,desc:"A small tied rowboat."}
-    "flowerpot":{
-    name:"flowerpot",
-    desc:"An old clay flowerpot sits by the path. It looks like it could be moved.",
-    take:false,
-    open:function(){
-        if(!game.flags.gotKey){
-            log("You lift the flowerpot and discover a brass key!");
-            game.inventory.push("brass key");
-            game.flags.gotKey=true;
-        } else {
-            log("You already took the brass key from under the flowerpot.")
-},
-"brass key":{
-    name:"brass key",
-    desc:"A small brass key. It looks like it could open a simple lock.",
-    take:true
-},
   }
 };
 
-/* Engine core */
+/* Core helpers */
 function room(){ return game.rooms[game.here]; }
 function itemsHere(){ return room().items || []; }
 function has(id){ return game.inventory.indexOf(id) !== -1; }
@@ -206,12 +192,7 @@ function removeFromRoomOrInv(id){ var r=room(); if(r.items){ r.items=r.items.fil
 function at(id){ return game.here===id; }
 function nameOf(id){ var it=game.items[id]; return it ? (typeof it.name==="function"?it.name():it.name) : id; }
 function articleName(id){ var it=game.items[id]; if(!it) return id; var nm=nameOf(id); var art=it.article||"a"; if(art==="the") return "the "+nm; var v=/^[aeiou]/i.test(nm); return (v?"an":"a")+" "+nm; }
-function updateDynamicExits(){
-  // Garden opens if gate is open AND cat not blocking
-  game.rooms.gate_road.exits.east = (game.flags.gateOpen ? "garden" : null);
-  // Porch inside exit reflects key possession
-  game.rooms.porch.exits.inside = has("house_key") ? "foyer" : null;
-}
+function updateDynamicExits(){ game.rooms.gate_road.exits.east = (game.flags.gateOpen ? "garden" : null); game.rooms.porch.exits.inside = has("house_key") ? "foyer" : null; }
 
 /* Parser + actions */
 var verbs = {
@@ -226,7 +207,7 @@ var verbs = {
   save: doSave, load: doLoad, help: doHelp, restart: doRestart,
   unlock:function(o){doOpen(o)}, give:function(o){doGive(o)}
 };
-var synonyms = {"lamp":"lamp_post","post":"lamp_post","pebble":"pebbles","boat":"rowboat_out","key":"house_key","brass key":"house_key","biscuit":"biscuits","envelope":"envelope"};
+var synonyms = {"lamp":"lamp_post","post":"lamp_post","pebble":"pebbles","boat":"rowboat_out","key":"house_key","brass key":"house_key","biscuit":"biscuits","envelope":"envelope","pot":"flowerpot"};
 
 function normalizeNoun(n){ if(!n) return null; n=n.replace(/^\s+|\s+$/g,"").toLowerCase(); var dirs={"north":1,"south":1,"east":1,"west":1,"inside":1,"outside":1}; if(dirs[n]) return n; return synonyms[n]||n; }
 function resolveItem(noun){
@@ -247,7 +228,7 @@ function describeRoom(){
   var items=itemsHere().filter(function(id){return !/_out$/.test(id) && game.items[id]});
   if(items.length) say("You see "+items.map(function(id){return articleName(id)}).join(", ")+".");
 }
-function doHelp(){ say("Commands: LOOK/L, EXAMINE/X <thing>, GO/G <N|S|E|W|INSIDE|OUTSIDE>, TAKE/GET <item>, DROP <item>, INVENTORY/I, OPEN/UNLOCK <thing>, READ <thing>, USE <thing>, TALK <to>, GIVE <item> TO <who>, WISH FOR <LIGHT|NEAR|OPEN|CALM>, SAVE, LOAD, RESTART."); }
+function doHelp(){ say("Commands: LOOK/L, EXAMINE/X <thing>, GO/G <N|S|E|W|INSIDE|OUTSIDE>, TAKE/GET <item>, DROP <item>, INVENTORY/I, OPEN/UNLOCK <thing>, READ <thing>, USE <thing>, TALK <to>, GIVE <item> TO <who>, WISH FOR <LIGHT|NEAR|OPEN|CALM>, SAVE, LOAD, RESTART.\nTip: In the Garden, WISH FOR LIGHT then LOOK FLOWERPOT or OPEN FLOWERPOT."); }
 function doLook(){ describeRoom(); }
 function doExamine(parts){ var id=resolveItem(parts.slice(1).join(" ")); if(!id) return say("You don't see that."); var it=game.items[id]; var d=typeof it.desc==="function"?it.desc():it.desc; say(d); }
 function doGo(parts){
@@ -272,7 +253,7 @@ function doOpen(parts){ var id=resolveItem(parts.slice(1).join(" ")); if(!id) re
 function doRead(parts){ var id=resolveItem(parts.slice(1).join(" ")); if(!id) return say("Read what?"); var v=game.items[id]&&game.items[id].verbs&&game.items[id].verbs.read; if(v) return v(); return say("There's nothing to read there."); }
 function doUse(parts){ var id=resolveItem(parts.slice(1).join(" ")); if(!id) return say("Use what?"); if(!has(id) && itemsHere().indexOf(id)===-1) return say("You don't have that."); var v=game.items[id]&&game.items[id].verbs&&game.items[id].verbs.use; if(v) return v(); return say("You fiddle with "+nameOf(id)+". Nothing happens."); }
 function doTalk(parts){ var idx=parts.indexOf("to"); var noun=idx>=0?parts.slice(idx+1).join(" "):parts.slice(1).join(" "); var id=resolveItem(noun); if(!id) return say("Talk to whom?"); var v=game.items[id]&&game.items[id].verbs&&game.items[id].verbs.talk; if(v) return v(); return say("They have nothing to say."); }
-function doGive(parts){ var idx=parts.indexOf("to"); if(idx<0) return say("Give what to whom? (e.g., GIVE BISCUITS TO CAT)"); var itemId=resolveItem(parts.slice(1,idx).join(" ")); var whoId=resolveItem(parts.slice(idx+1).join(" ")); if(!itemId||!whoId) return say("Give what to whom?"); if(!has(itemId)) return say("You don't have "+nameOf(itemId)+"."); if(whoId!=="cat") return say("That doesn't want gifts."); if(itemId==="biscuits" && !game.flags.catFreed){ game.flags.catFreed=true; updateDynamicExits(); return say("The cat devours a biscuit and hops aside."); } say("The cat sniffs and loses interest."); }
+function doGive(parts){ var idx=parts.indexOf("to"); if(idx<0) return say("Give what to whom? (e.g., GIVE BISCUITS TO CAT)"); var itemId=resolveItem(parts.slice(1,idx).join(" ")); var whoId=resolveItem(parts.slice(idx+1).join(" ")); if(!itemId||!whoId) return say("Give what to whom?"); if(!has(itemId)) return say("You don't have "+nameOf(itemId)+"."); if(whoId!=="cat") return say("That doesn't want gifts."); if(itemId==="biscuits" && !game.flags.catFreed){ game.flags.catFreed=true; return say("The cat devours a biscuit and hops aside."); } say("The cat sniffs and loses interest."); }
 function doWish(parts){
   var idx=parts.indexOf("for"); var target=(idx>=0?parts.slice(idx+1):parts.slice(1)).join(" ").replace(/^\s+|\s+$/g,"").toLowerCase();
   if(!has("wishstone")) return say("You have nothing suitable for wishing."); if(!target) return say("WISH FOR what? Try LIGHT, NEAR, OPEN, or CALM.");
@@ -280,7 +261,7 @@ function doWish(parts){
   if(target.indexOf("light")===0){ game.flags.light=true; return say("A soft radiance gathers around you, pushing back the dark."); }
   if(target.indexOf("near")===0){ if(game.here==="harbor_edge" && !has("rowboat")){ addInv("rowboat"); return say("The rowboat drifts closer. You secure it."); } return say("A sense of closeness settles, but nothing else changes."); }
   if(target.indexOf("open")===0){ if(game.here==="gate_road" && !game.flags.gateOpen){ game.flags.gateOpen=true; updateDynamicExits(); return say("Metal sighs; the iron gate yields with a reluctant clank."); } return say("Somewhere, a latch clicks — but not here."); }
-  if(target.indexOf("calm")===0){ if(!game.flags.catFreed && game.here==="gate_road"){ game.flags.catFreed=true; updateDynamicExits(); return say("The cat blinks slowly and hops aside."); } return say("The world hushes for a heartbeat."); }
+  if(target.indexOf("calm")===0){ if(!game.flags.catFreed && game.here==="gate_road"){ game.flags.catFreed=true; return say("The cat blinks slowly and hops aside."); } return say("The world hushes for a heartbeat."); }
   say("The stone feels puzzled by that request.");
 }
 function checkWin(){ if(game.here==="foyer" && !game.flags.won){ game.flags.won=true; say("\nA voice from within: \"Right on time.\" You leave the biscuits on the hall table.\nThe stone cools, satisfied. — THE END (prototype)"); } }
@@ -302,13 +283,15 @@ function handle(line){
 /* Boot */
 function init(hard){
   if(hard){
-    game.turn=0; game.flags={light:false, gateOpen:false, catFreed:false, stoneAwake:false, won:false}; game.inventory=[];
-    game.rooms.green_gables_path.items=["sign","lamp_post","envelope"]; /* ensure envelope is here */
+    game.turn=0;
+    game.flags={ light:false, gateOpen:false, catFreed:false, stoneAwake:false, won:false, potKeyTaken:false };
+    game.inventory=["wishstone","biscuits"]; /* keep it simple */
+    game.rooms.green_gables_path.items=["sign","lamp_post"];
     game.rooms.harbor_edge.items=["pebbles","rowboat_out"];
     game.rooms.gate_road.items=["gate","cat","note"];
     game.rooms.garden.items=["flowerpot"];
     game.rooms.porch.items=["door","plaque"];
-    game.rooms.foyer.items=[]; /* ensure envelope is NOT here */
+    game.rooms.foyer.items=[];
   }
   game.here=game.start;
   document.getElementById('log').innerHTML="Deliver the biscuits to Green Gables after dark.<br>(HELP for commands)";
