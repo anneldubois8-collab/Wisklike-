@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Wishlike (Inline – No g)</title>
+<title>Wishlike (Garden-Ready)</title>
 <style>
   :root{--bg:#0f0f0f;--fg:#f3f3f3;--muted:#bdbdbd;--panel:#161616;--border:#2a2a2a;--hud-h:56px}
   html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:ui-rounded,-apple-system,system-ui,Segoe UI,Roboto,Arial}
@@ -13,25 +13,25 @@
   .badge{background:#1d1d1d;border:1px solid var(--border);padding:6px 10px;border-radius:10px;color:var(--muted)}
   #log{flex:1;overflow:auto;padding:14px 14px 24px 14px;line-height:1.35;font-size:18px;background:var(--panel)}
   .footer{position:sticky;bottom:0;background:#121212;border-top:1px solid var(--border)}
-  .quickbar{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:12px}
+  .quickbar{display:grid;grid-template-columns:repeat(9,1fr);gap:8px;padding:12px}
   .qbtn{font-size:16px;padding:12px 10px;background:#1b1b1b;color:#fff;border:1px solid var(--border);border-radius:10px}
   .promptline{display:flex;gap:8px;padding:10px;padding-top:0}
   #input{flex:1;font-size:18px;padding:14px 12px;background:#161616;color:#fff;border:1px solid var(--border);border-radius:10px}
   #btn{font-size:18px;font-weight:700;padding:14px 16px;background:#35d07f;color:#000;border:none;border-radius:10px}
-  @media (max-width:380px){.quickbar{grid-template-columns:repeat(4,1fr)}}
+  @media (max-width:420px){.quickbar{grid-template-columns:repeat(4,1fr)}}
   #errors{display:none;margin:8px 14px;background:#3b0f12;border:1px solid #632529;border-radius:8px;color:#ffd4d4;padding:10px;font-size:14px;white-space:pre-wrap}
 </style>
 </head>
 <body>
 <div id="app">
   <div class="hud">
-    <div class="title">Wishlike — inline</div>
+    <div class="title">Wishlike</div>
     <div class="badge" id="loc">—</div>
     <div class="badge" id="time">Turn 0</div>
   </div>
 
   <div id="errors" aria-live="polite"></div>
-  <div id="log" aria-live="polite">Deliver the biscuits to Green Gables after dark.<br>(HELP for commands)</div>
+  <div id="log" aria-live="polite">Welcome to Wishlike.</div>
 
   <div class="footer">
     <div class="quickbar" aria-label="Quick actions">
@@ -42,17 +42,20 @@
       <button class="qbtn" onclick="handle('S')">S</button>
       <button class="qbtn" onclick="handle('E')">E</button>
       <button class="qbtn" onclick="handle('W')">W</button>
+      <button class="qbtn" onclick="handle('WISH FOR CALM')">CALM</button>
+      <button class="qbtn" onclick="handle('WISH FOR OPEN')">OPEN</button>
     </div>
     <div class="promptline">
       <input id="input" type="text" inputmode="latin" autocomplete="off" autocapitalize="characters" autocorrect="off"
-             placeholder="Type a command (e.g., WISH FOR LIGHT)" onkeydown="if(event.key==='Enter'){sendCmd()}" />
+             placeholder="Type a command (e.g., OPEN ENVELOPE, WISH FOR OPEN)" onkeydown="if(event.key==='Enter'){sendCmd()}" />
       <button id="btn" aria-label="Enter command" onclick="sendCmd()">Enter</button>
+      <button class="qbtn" onclick="init(true)" title="Restart">↻</button>
     </div>
   </div>
 </div>
 
 <script>
-/* On-page error box */
+/* Show script errors on the page */
 (function(){
   var errBox=document.getElementById('errors');
   window.addEventListener('error', function(e){
@@ -72,7 +75,7 @@ function say(t){ appendHTML(t); }
 function setHUD(){ document.getElementById('loc').textContent = room().name; document.getElementById('time').textContent = 'Turn ' + game.turn; }
 function sendCmd(){ var inp=document.getElementById('input'); var v=inp.value; inp.value=''; handle(v); inp.focus(); }
 
-/* Game data — all functions read global `game` (no params) */
+/* Game (envelope at start; dynamic east exit updates) */
 var game = {
   turn:0,
   flags:{ light:false, gateOpen:false, catFreed:false, stoneAwake:false, won:false },
@@ -88,7 +91,7 @@ var game = {
                "A crooked sign reads: \"Deliveries to Green Gables — " + (game.flags.catFreed ? "Thank you." : "After dark, beware the cat.") + "\"";
       },
       exits:{west:"harbor_edge", east:"gate_road"},
-      items:["sign","lamp_post","envelope"]
+      items:["sign","lamp_post","envelope"]   /* ← envelope now starts here */
     },
     "harbor_edge":{
       name:"Harbor Edge",
@@ -106,7 +109,7 @@ var game = {
                ". Beyond, a garden path loses itself in shadow.\n" +
                "A " + ((has("cat")||game.flags.catFreed) ? "contented" : "watchful") + " cat watches from the wall.";
       },
-      exits:{west:"green_gables_path", east:null},
+      exits:{west:"green_gables_path", east:null}, /* east gets toggled by updateDynamicExits() */
       items:["gate","cat","note"]
     },
     "garden":{
@@ -131,7 +134,7 @@ var game = {
     "foyer":{
       name:"Foyer",
       desc:function(){
-        return "A quiet foyer with the smell of tea and ink. On a small table lies a sealed envelope addressed \"To the Deliverer.\"";
+        return "A quiet foyer with the smell of tea and ink. A small table is cleared.";
       },
       exits:{outside:"porch"},
       items:[]
@@ -170,7 +173,7 @@ var game = {
       verbs:{ use:function(){ say("If you mean to WISH, say \"WISH FOR ...\"."); }, read:function(){ say("Runes: Light. Near. Open. Calm."); } }
     },
     "biscuits":{name:"bag of biscuits",article:"a",portable:true,desc:"Warm biscuits.",
-      verbs:{ use:function(){ if(at("gate_road")&&!game.flags.catFreed){ game.flags.catFreed=true; say("The cat devours a biscuit and hops aside."); } else say("You have a nibble."); } }
+      verbs:{ use:function(){ if(at("gate_road")&&!game.flags.catFreed){ game.flags.catFreed=true; say("The cat devours a biscuit and hops aside."); updateDynamicExits(); } else say("You have a nibble."); } }
     },
     "house_key":{name:"brass key",article:"a",portable:true,desc:"Well-worn."},
     "rowboat":{name:"rowboat",article:"a",portable:true,desc:"A small tied rowboat."}
@@ -186,7 +189,12 @@ function removeFromRoomOrInv(id){ var r=room(); if(r.items){ r.items=r.items.fil
 function at(id){ return game.here===id; }
 function nameOf(id){ var it=game.items[id]; return it ? (typeof it.name==="function"?it.name():it.name) : id; }
 function articleName(id){ var it=game.items[id]; if(!it) return id; var nm=nameOf(id); var art=it.article||"a"; if(art==="the") return "the "+nm; var v=/^[aeiou]/i.test(nm); return (v?"an":"a")+" "+nm; }
-function updateDynamicExits(){ game.rooms.gate_road.exits.east = game.flags.gateOpen ? "garden" : null; game.rooms.porch.exits.inside = has("house_key") ? "foyer" : null; }
+function updateDynamicExits(){
+  // Garden opens if gate is open AND cat not blocking
+  game.rooms.gate_road.exits.east = (game.flags.gateOpen ? "garden" : null);
+  // Porch inside exit reflects key possession
+  game.rooms.porch.exits.inside = has("house_key") ? "foyer" : null;
+}
 
 /* Parser + actions */
 var verbs = {
@@ -228,8 +236,8 @@ function doExamine(parts){ var id=resolveItem(parts.slice(1).join(" ")); if(!id)
 function doGo(parts){
   var dir=(parts[1]||"").toLowerCase(); var r=room(); var dest=(r.exits||{})[dir];
   if(!dest){
-    if (dir==="east" && game.here==="gate_road" && !game.flags.gateOpen) return say("The locked gate bars the way.");
-    if (dir==="north" && game.here==="garden" && !game.flags.light) return say("It's too dark to blunder forward safely.");
+    if (game.here==="gate_road" && dir==="east" && !game.flags.gateOpen) return say("The locked gate bars the way.");
+    if (game.here==="garden" && dir==="north" && !game.flags.light) return say("It's too dark to blunder forward safely.");
     return say("You can't go that way.");
   }
   move(dest);
@@ -247,7 +255,7 @@ function doOpen(parts){ var id=resolveItem(parts.slice(1).join(" ")); if(!id) re
 function doRead(parts){ var id=resolveItem(parts.slice(1).join(" ")); if(!id) return say("Read what?"); var v=game.items[id]&&game.items[id].verbs&&game.items[id].verbs.read; if(v) return v(); return say("There's nothing to read there."); }
 function doUse(parts){ var id=resolveItem(parts.slice(1).join(" ")); if(!id) return say("Use what?"); if(!has(id) && itemsHere().indexOf(id)===-1) return say("You don't have that."); var v=game.items[id]&&game.items[id].verbs&&game.items[id].verbs.use; if(v) return v(); return say("You fiddle with "+nameOf(id)+". Nothing happens."); }
 function doTalk(parts){ var idx=parts.indexOf("to"); var noun=idx>=0?parts.slice(idx+1).join(" "):parts.slice(1).join(" "); var id=resolveItem(noun); if(!id) return say("Talk to whom?"); var v=game.items[id]&&game.items[id].verbs&&game.items[id].verbs.talk; if(v) return v(); return say("They have nothing to say."); }
-function doGive(parts){ var idx=parts.indexOf("to"); if(idx<0) return say("Give what to whom? (e.g., GIVE BISCUITS TO CAT)"); var itemId=resolveItem(parts.slice(1,idx).join(" ")); var whoId=resolveItem(parts.slice(idx+1).join(" ")); if(!itemId||!whoId) return say("Give what to whom?"); if(!has(itemId)) return say("You don't have "+nameOf(itemId)+"."); if(whoId!=="cat") return say("That doesn't want gifts."); if(itemId==="biscuits" && !game.flags.catFreed){ game.flags.catFreed=true; return say("The cat devours them and hops aside."); } say("The cat sniffs and loses interest."); }
+function doGive(parts){ var idx=parts.indexOf("to"); if(idx<0) return say("Give what to whom? (e.g., GIVE BISCUITS TO CAT)"); var itemId=resolveItem(parts.slice(1,idx).join(" ")); var whoId=resolveItem(parts.slice(idx+1).join(" ")); if(!itemId||!whoId) return say("Give what to whom?"); if(!has(itemId)) return say("You don't have "+nameOf(itemId)+"."); if(whoId!=="cat") return say("That doesn't want gifts."); if(itemId==="biscuits" && !game.flags.catFreed){ game.flags.catFreed=true; updateDynamicExits(); return say("The cat devours a biscuit and hops aside."); } say("The cat sniffs and loses interest."); }
 function doWish(parts){
   var idx=parts.indexOf("for"); var target=(idx>=0?parts.slice(idx+1):parts.slice(1)).join(" ").replace(/^\s+|\s+$/g,"").toLowerCase();
   if(!has("wishstone")) return say("You have nothing suitable for wishing."); if(!target) return say("WISH FOR what? Try LIGHT, NEAR, OPEN, or CALM.");
@@ -255,7 +263,7 @@ function doWish(parts){
   if(target.indexOf("light")===0){ game.flags.light=true; return say("A soft radiance gathers around you, pushing back the dark."); }
   if(target.indexOf("near")===0){ if(game.here==="harbor_edge" && !has("rowboat")){ addInv("rowboat"); return say("The rowboat drifts closer. You secure it."); } return say("A sense of closeness settles, but nothing else changes."); }
   if(target.indexOf("open")===0){ if(game.here==="gate_road" && !game.flags.gateOpen){ game.flags.gateOpen=true; updateDynamicExits(); return say("Metal sighs; the iron gate yields with a reluctant clank."); } return say("Somewhere, a latch clicks — but not here."); }
-  if(target.indexOf("calm")===0){ if(!game.flags.catFreed && game.here==="gate_road"){ game.flags.catFreed=true; return say("The cat blinks slowly and hops aside."); } return say("The world hushes for a heartbeat."); }
+  if(target.indexOf("calm")===0){ if(!game.flags.catFreed && game.here==="gate_road"){ game.flags.catFreed=true; updateDynamicExits(); return say("The cat blinks slowly and hops aside."); } return say("The world hushes for a heartbeat."); }
   say("The stone feels puzzled by that request.");
 }
 function checkWin(){ if(game.here==="foyer" && !game.flags.won){ game.flags.won=true; say("\nA voice from within: \"Right on time.\" You leave the biscuits on the hall table.\nThe stone cools, satisfied. — THE END (prototype)"); } }
@@ -278,12 +286,12 @@ function handle(line){
 function init(hard){
   if(hard){
     game.turn=0; game.flags={light:false, gateOpen:false, catFreed:false, stoneAwake:false, won:false}; game.inventory=[];
-    game.rooms.green_gables_path.items=["sign","lamp_post"];
+    game.rooms.green_gables_path.items=["sign","lamp_post","envelope"]; /* ensure envelope is here */
     game.rooms.harbor_edge.items=["pebbles","rowboat_out"];
     game.rooms.gate_road.items=["gate","cat","note"];
     game.rooms.garden.items=["flowerpot"];
     game.rooms.porch.items=["door","plaque"];
-    game.rooms.foyer.items=["envelope"];
+    game.rooms.foyer.items=[]; /* ensure envelope is NOT here */
   }
   game.here=game.start;
   document.getElementById('log').innerHTML="Deliver the biscuits to Green Gables after dark.<br>(HELP for commands)";
