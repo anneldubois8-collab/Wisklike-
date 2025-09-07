@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Wishlike — Stable Build</title>
+<title>Wishlike — Flowerpot Fix</title>
 <style>
   :root{--bg:#0f0f0f;--fg:#f3f3f3;--muted:#bdbdbd;--panel:#161616;--border:#2a2a2a;--hud-h:56px}
   html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:ui-rounded,-apple-system,system-ui,Segoe UI,Roboto,Arial}
   #app{height:100%;display:flex;flex-direction:column}
-  .hud{position:sticky;top:0;padding:10px;height:var(--hud-h);background:#121212;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;font-size:16px}
+  .hud{position:sticky;top:0;padding:10px;height:var(--hud-h);background:#121212;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
   .title{font-weight:700;margin-right:auto}
   .badge{background:#1d1d1d;border:1px solid var(--border);padding:6px 10px;border-radius:10px;color:var(--muted)}
   #errors{display:none;margin:8px 14px;background:#3b0f12;border:1px solid #632529;border-radius:8px;color:#ffd4d4;padding:10px;font-size:14px;white-space:pre-wrap}
@@ -79,7 +79,7 @@ function sendCmd(){ var inp=document.getElementById('input'); var v=inp.value; i
 var game = {
   turn:0,
   flags:{ light:false, gateOpen:false, catFreed:false, stoneAwake:false, won:false, potKeyTaken:false },
-  inventory:["wishstone","biscuits"],  /* start with items so you can wish immediately */
+  inventory:["wishstone","biscuits"],  // start with wishstone so progress is guaranteed
   start:"green_gables_path",
   rooms:{
     "green_gables_path":{
@@ -106,9 +106,9 @@ var game = {
       desc:function(){
         return "The road ends at a low wall and an iron gate "+(game.flags.gateOpen?"hanging ajar":"locked tight")+
                ". Beyond, a garden path loses itself in shadow.\n"+
-               "A "+((game.flags.catFreed)?"contented":"watchful")+" cat watches from the wall.";
+               "A "+(game.flags.catFreed?"contented":"watchful")+" cat watches from the wall.";
       },
-      exits:{west:"green_gables_path", east:null}, /* east toggled by updateDynamicExits() */
+      exits:{west:"green_gables_path", east:null}, // east toggled by updateDynamicExits()
       items:["gate","cat","note"]
     },
     "garden":{
@@ -151,20 +151,25 @@ var game = {
     },
     "cat":{name:"cat",article:"a",portable:false,
       desc:function(){ return game.flags.catFreed ? "A purring guardian." : "A wary cat, eyes like coals."; },
-      verbs:{
-        talk:function(){ if(!game.flags.catFreed) return say("“Mrrrp.” It eyes your hands."); say("The cat chirps."); }
-      }
+      verbs:{ talk:function(){ if(!game.flags.catFreed) return say("“Mrrrp.” It eyes your hands."); say("The cat chirps."); } }
     },
     "note":{name:"note",article:"a",portable:true,desc:"\"Payment enclosed. Bring biscuits.\"",verbs:{read:function(){say("It says to bring biscuits.");}}},
+    /* FLOWERPOT: all verbs route to same reveal() which auto-gives key if LIGHT is on */
     "flowerpot":{name:"flowerpot",article:"a",portable:false,
       desc:function(){ return game.flags.light ? "A clay pot by the path; something glints beneath." : "A clay pot sits in darkness."; },
       verbs:{
-        look:function(){
+        reveal:function(){
           if(!game.flags.light) return say("It's too dark to see under the pot.");
-          if(!game.flags.potKeyTaken){ addInv("house_key"); game.flags.potKeyTaken=true; return say("You lift the pot and find a brass key. Taken."); }
-          say("Nothing else under the pot.");
+          if(!game.flags.potKeyTaken){
+            addInv("house_key"); game.flags.potKeyTaken=true;
+            say("You lift the pot and find a brass key. Taken.");
+          } else {
+            say("Nothing else under the pot.");
+          }
         },
-        open:function(){ this.look(); }
+        look:function(){ this.reveal(); },
+        open:function(){ this.reveal(); },
+        use:function(){ this.reveal(); }
       }
     },
     "door":{name:"front door",article:"the",portable:false,
@@ -205,10 +210,14 @@ var verbs = {
   take: doTake, get: doTake, drop: doDrop, inventory: doInv, i: doInv,
   open: doOpen, read: doRead, use: doUse, talk: doTalk, wish: doWish,
   save: doSave, load: doLoad, help: doHelp, restart: doRestart,
-  unlock:function(o){doOpen(o)}, give:function(o){doGive(o)}
+  unlock:(p)=>doOpen(p), give:(p)=>doGive(p),
+  // aliases to manipulate the pot
+  move:(p)=>doOpen(["open"].concat(p.slice(1))),
+  lift:(p)=>doOpen(["open"].concat(p.slice(1)))
 };
-var synonyms = {"lamp":"lamp_post","post":"lamp_post","pebble":"pebbles","boat":"rowboat_out","key":"house_key","brass key":"house_key","biscuit":"biscuits","envelope":"envelope","pot":"flowerpot"};
 
+// normalize nouns + synonyms (support POT and KEY)
+var synonyms = {"lamp":"lamp_post","post":"lamp_post","pebble":"pebbles","boat":"rowboat_out","key":"house_key","brass key":"house_key","pot":"flowerpot"};
 function normalizeNoun(n){ if(!n) return null; n=n.replace(/^\s+|\s+$/g,"").toLowerCase(); var dirs={"north":1,"south":1,"east":1,"west":1,"inside":1,"outside":1}; if(dirs[n]) return n; return synonyms[n]||n; }
 function resolveItem(noun){
   noun = normalizeNoun(noun); if(!noun) return null;
@@ -222,15 +231,31 @@ function resolveItem(noun){
   return null;
 }
 
+/* LOOK now supports "LOOK THING" (delegates to EXAMINE) and room-only LOOK */
+function doLook(parts){
+  if(parts && parts.length>1){ return doExamine(parts); }
+  describeRoom();
+}
+function doExamine(parts){
+  // swallow filler: LOOK/EXAMINE AT/UNDER/BENEATH X
+  var filtered = parts.slice(1).filter(function(w){ return !/^at$|^under$|^beneath$/.test(w); });
+  var id = resolveItem(filtered.join(" "));
+  if(!id) return say("You don't see that.");
+  var it=game.items[id];
+  // if the thing has a "look" verb, run it (so pot reveals key)
+  if(it && it.verbs && typeof it.verbs.look==="function"){ return it.verbs.look(); }
+  var d=typeof it.desc==="function"?it.desc():it.desc; say(d);
+}
+
 function describeRoom(){
   var r=room(); var d=typeof r.desc==="function"?r.desc():r.desc;
   say("\n"+r.name+"\n"+d);
   var items=itemsHere().filter(function(id){return !/_out$/.test(id) && game.items[id]});
   if(items.length) say("You see "+items.map(function(id){return articleName(id)}).join(", ")+".");
 }
-function doHelp(){ say("Commands: LOOK/L, EXAMINE/X <thing>, GO/G <N|S|E|W|INSIDE|OUTSIDE>, TAKE/GET <item>, DROP <item>, INVENTORY/I, OPEN/UNLOCK <thing>, READ <thing>, USE <thing>, TALK <to>, GIVE <item> TO <who>, WISH FOR <LIGHT|NEAR|OPEN|CALM>, SAVE, LOAD, RESTART.\nTip: In the Garden, WISH FOR LIGHT then LOOK FLOWERPOT or OPEN FLOWERPOT."); }
-function doLook(){ describeRoom(); }
-function doExamine(parts){ var id=resolveItem(parts.slice(1).join(" ")); if(!id) return say("You don't see that."); var it=game.items[id]; var d=typeof it.desc==="function"?it.desc():it.desc; say(d); }
+
+function doHelp(){ say("Commands: LOOK/L, EXAMINE/X <thing> (LOOK UNDER works), GO/G <N|S|E|W|INSIDE|OUTSIDE>, TAKE/GET <item>, DROP <item>, INVENTORY/I, OPEN/UNLOCK <thing>, READ <thing>, USE <thing>, TALK <to>, GIVE <item> TO <who>, WISH FOR <LIGHT|NEAR|OPEN|CALM>, SAVE, LOAD, RESTART."); }
+
 function doGo(parts){
   var dir=(parts[1]||"").toLowerCase(); var r=room(); var dest=(r.exits||{})[dir];
   if(!dest){
@@ -241,6 +266,7 @@ function doGo(parts){
   move(dest);
 }
 function move(dest){ game.here=dest; game.turn++; updateDynamicExits(); setHUD(); describeRoom(); checkWin(); }
+
 function doTake(parts){ var id=resolveItem(parts.slice(1).join(" ")); if(!id) return say("Take what?");
   if(has(id)) return say("You already have "+nameOf(id)+"."); if(itemsHere().indexOf(id)===-1 && !/_out$/.test(id)) return say("You don't see that here.");
   var it=game.items[id]; if(it && it.portable===false) return say("You can't take "+nameOf(id)+".");
@@ -269,7 +295,7 @@ function doSave(){ try{ localStorage.setItem("wishlike_save", JSON.stringify(gam
 function doLoad(){ var s=localStorage.getItem("wishlike_save"); if(!s) return say("No save found."); var o=JSON.parse(s); for(var k in o){ game[k]=o[k]; } setHUD(); describeRoom(); say("Loaded."); }
 function doRestart(){ init(true); say("Restarted."); }
 
-/* Input cycle (inline) */
+/* Dispatcher */
 function handle(line){
   line=(line||"").trim(); if(!line) return; say("\n> "+line);
   var t=line.toLowerCase().split(/\s+/); var v=t[0];
@@ -285,7 +311,7 @@ function init(hard){
   if(hard){
     game.turn=0;
     game.flags={ light:false, gateOpen:false, catFreed:false, stoneAwake:false, won:false, potKeyTaken:false };
-    game.inventory=["wishstone","biscuits"]; /* keep it simple */
+    game.inventory=["wishstone","biscuits"]; // keep it simple
     game.rooms.green_gables_path.items=["sign","lamp_post"];
     game.rooms.harbor_edge.items=["pebbles","rowboat_out"];
     game.rooms.gate_road.items=["gate","cat","note"];
