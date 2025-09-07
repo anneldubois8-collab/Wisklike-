@@ -1,37 +1,119 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>JS Smoke Test</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Wishlike (Mobile – Clean)</title>
 <style>
-  html,body{height:100%;margin:0;font-family:system-ui;background:#0f0f0f;color:#eee}
-  #root{display:flex;align-items:center;justify-content:center;height:100%;text-align:center;padding:24px}
-  .dead{color:#ff5757;font-size:22px;font-weight:700}
-  .ok{color:#41d17d;font-size:22px;font-weight:700}
-  pre{white-space:pre-wrap;text-align:left;background:#151515;border:1px solid #2a2a2a;padding:12px;border-radius:8px;margin-top:16px}
+  :root{
+    --bg:#0f0f0f; --fg:#f3f3f3; --muted:#bdbdbd; --panel:#161616; --border:#2a2a2a;
+    --hud-h:56px; --safe-top: env(safe-area-inset-top); --safe-bottom: env(safe-area-inset-bottom);
+  }
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);
+    font-family: ui-rounded, -apple-system, system-ui, Segoe UI, Roboto, Arial;}
+  #app{height:100%;display:flex;flex-direction:column;}
+  .hud{position:sticky;top:0;padding:10px calc(12px + var(--safe-top));
+    height:var(--hud-h);background:#121212;border-bottom:1px solid var(--border);
+    display:flex;align-items:center;gap:10px;font-size:16px}
+  .title{font-weight:700;margin-right:auto}
+  .badge{background:#1d1d1d;border:1px solid var(--border);padding:6px 10px;border-radius:10px;color:var(--muted)}
+  #log{
+    flex:1;overflow:auto;padding:14px 14px 24px 14px;line-height:1.35;font-size:18px;background:var(--panel);
+  }
+  .footer{position:sticky;bottom:0;background:#121212;border-top:1px solid var(--border);
+    padding-bottom:calc(8px + var(--safe-bottom));}
+  .quickbar{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:12px}
+  .qbtn{font-size:16px;padding:12px 10px;background:#1b1b1b;color:#fff;border:1px solid var(--border);border-radius:10px}
+  .qbtn:active{transform:scale(0.98)}
+  .promptline{display:flex;gap:8px;padding:10px;padding-top:0}
+  #input{flex:1;font-size:18px;padding:14px 12px;background:#161616;color:#fff;border:1px solid var(--border);border-radius:10px}
+  #btn{font-size:18px;font-weight:700;padding:14px 16px;background:#35d07f;color:#000;border:none;border-radius:10px}
+  @media (max-width:380px){.quickbar{grid-template-columns:repeat(4,1fr)}}
 </style>
 </head>
 <body>
-<div id="root">
-  <div>
-    <div id="status" class="dead">HTML loaded. If you only see this red message, JavaScript did NOT run.</div>
-    <pre id="errors" style="display:none"></pre>
+<div id="app">
+  <div class="hud">
+    <div class="title">Wishlike</div>
+    <div class="badge" id="loc">—</div>
+    <div class="badge" id="time">Turn 0</div>
+  </div>
+
+  <div id="log" aria-live="polite">Loading…</div>
+
+  <div class="footer">
+    <div class="quickbar" aria-label="Quick actions">
+      <button class="qbtn" data-cmd="LOOK">LOOK</button>
+      <button class="qbtn" data-cmd="I">INV</button>
+      <button class="qbtn" data-cmd="HELP">HELP</button>
+      <button class="qbtn" data-cmd="N">N</button>
+      <button class="qbtn" data-cmd="S">S</button>
+      <button class="qbtn" data-cmd="E">E</button>
+      <button class="qbtn" data-cmd="W">W</button>
+    </div>
+    <div class="promptline">
+      <input id="input" type="text" inputmode="latin" autocomplete="off" autocapitalize="characters" autocorrect="off"
+             placeholder="Type a command (e.g., WISH FOR LIGHT)" />
+      <button id="btn" aria-label="Enter command">Enter</button>
+    </div>
   </div>
 </div>
 
 <script>
-  // surface any JS errors directly on the page
-  window.addEventListener('error', function(e){
-    var box = document.getElementById('errors');
-    box.style.display='block';
-    box.textContent += "[JS ERROR] " + (e && e.message ? e.message : e) + "\n";
-  });
+/* Show JS errors on-screen so debugging is easy */
+window.addEventListener('error', e=>{
+  const log=document.getElementById('log');
+  const msg = e && e.message ? e.message : String(e);
+  log.innerHTML += '<div style="color:#ff6b6b;margin-top:8px">[JS ERROR] '+msg+'</div>';
+});
 
-  // if we got here, JS is executing
-  var s = document.getElementById('status');
-  s.className = 'ok';
-  s.textContent = 'JavaScript is running. You are good to go.';
+/* Utility: append with HTML line breaks */
+function appendHTML(text){
+  const log = document.getElementById('log');
+  const html = String(text).replace(/\n/g,'<br>');
+  log.innerHTML += (log.innerHTML ? '<br>' : '') + html;
+  log.scrollTop = log.scrollHeight;
+}
+
+/* ===== Minimal IF (clean rendering) ===== */
+const state = { turn:0, here:"lane" };
+const rooms = {
+  lane:   { name:"Pebble Lane", desc:"Dusk settles over the village. East to a gate; west to the harbor.", exits:{e:"gate", w:"harbor"} },
+  gate:   { name:"Iron Gate",   desc:"An old iron gate. West returns to the lane.",                           exits:{w:"lane"} },
+  harbor: { name:"Harbor Edge", desc:"Water slaps the pilings. East returns to the lane.",                    exits:{e:"lane"} }
+};
+
+const locEl = document.getElementById('loc');
+const timeEl= document.getElementById('time');
+const logEl = document.getElementById('log');
+const input = document.getElementById('input');
+const btn   = document.getElementById('btn');
+
+function setHUD(){ locEl.textContent = rooms[state.here].name; timeEl.textContent = 'Turn ' + state.turn; }
+function say(t){ appendHTML(t); }
+function look(){ const r=rooms[state.here]; say('\n'+r.name+'\n'+r.desc); }
+function move(dir){
+  const r=rooms[state.here]; const d=r.exits[dir];
+  if(!d) return say("You can’t go that way.");
+  state.here=d; state.turn++; setHUD(); look();
+}
+function handle(cmdRaw){
+  const cmd=(cmdRaw||'').trim().toLowerCase(); if(!cmd) return;
+  say('\n> '+cmd);
+  if (cmd==='look'||cmd==='l') return look();
+  if (['n','s','e','w'].includes(cmd)) return move(cmd);
+  if (cmd==='help') return say('Try LOOK (or L), and N/S/E/W to move.');
+  say('Unknown command. Try LOOK or N/S/E/W.');
+}
+btn.onclick = ()=>{ const v=input.value; input.value=''; handle(v); input.focus(); };
+input.addEventListener('keydown', e=>{ if(e.key==='Enter'){ btn.click(); }});
+document.querySelectorAll('.qbtn').forEach(b=> b.addEventListener('click', ()=> { handle(b.dataset.cmd); input.focus(); }));
+
+/* Boot */
+appendHTML("Welcome to Wishlike (clean).");
+setHUD(); look();
+
+/* --- Once this works, swap this tiny engine for the full game content I gave earlier. --- */
 </script>
 </body>
 </html>
